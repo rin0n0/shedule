@@ -1,0 +1,47 @@
+/* src/assets/main.css */
+
+/* === СВЕТЛАЯ ТЕМА (по умолчанию) === */
+:root {
+  --bg-color: #f2f2f7;
+  --card-bg: rgba(255, 255, 255, 0.65);
+  --card-border: rgba(0, 0, 0, 0.1);
+  --row-border: rgba(0, 0, 0, 0.08);
+  --text-primary: #000000;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #a0a0a5;
+  --accent-color: #007aff; /* Синий, как в iOS */
+  --accent-color-light: #e6f2ff;
+}
+
+/* === ТЕМНАЯ ТЕМА (подхватывается автоматически) === */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-color: #1c1c1e;
+    --card-bg: rgba(44, 44, 46, 0.65);
+    --card-border: rgba(255, 255, 255, 0.15);
+    --row-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: #8e8e93;
+    --text-tertiary: #636366;
+    --accent-color: #0a84ff;
+    --accent-color-light: rgba(10, 132, 255, 0.2);
+  }
+}
+
+body {
+  background: var(--bg-color);
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  color: var(--text-primary);
+  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
+  transition: background-color 0.3s ease;
+}
+
+#app {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ... остальные глобальные стили (анимации и т.д.) ... */
