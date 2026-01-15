@@ -1,0 +1,22 @@
+services:
+  backend:
+    build: ./backend
+    container_name: shedule_backend
+    restart: always
+    networks:
+      - app-net
+
+  frontend:
+    build: ./frontend
+    container_name: shedule_frontend
+    depends_on:
+      - backend
+    restart: always
+    ports:
+      - "8089:80"
+    networks:
+      - app-net
+
+networks:
+  app-net:
+    driver: bridge

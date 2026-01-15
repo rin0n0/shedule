@@ -167,7 +167,7 @@ const getDayName = (dateStr: string) => {
 /* Стилизуем ячейки грида */
 .time-cell,
 .content-cell {
-    padding: 15px 10px;
+    padding: 10px 10px;
     display: flex;
     align-items: center;
     /* Выравнивание по центру по вертикали */
