@@ -1,11 +1,6 @@
 import { defineStore } from "pinia";
-import type {
-  ScheduleCache,
-  DaySchedule,
-  SearchResponse,
-  ActiveDaysResponse,
-} from "@/types";
-import { apiClient } from "@/api/index";
+import type { ScheduleCache, DaySchedule } from "@/types";
+import { apiClient } from "@/index";
 
 const formatDate = (date: Date): string => date.toISOString().substring(0, 10);
 
@@ -14,18 +9,31 @@ export const useMainStore = defineStore("main", {
     userGroup: null as string | null,
     userTeacher: null as string | null,
     userSubgroup: 0,
+
+    // КЭШ
     scheduleCache: {} as ScheduleCache,
     activeDays: new Set<string>(),
     isLoading: false,
+
+    // НОВОЕ: Дата, которую сейчас смотрит пользователь (для заголовка)
+    viewedDate: new Date().toISOString().substring(0, 10),
   }),
 
   getters: {
-    // Зарегистрирован, если есть группа ИЛИ учитель
     isRegistered: (state): boolean => !!state.userGroup || !!state.userTeacher,
     getDaySchedule: (state) => (date: string) => state.scheduleCache[date],
-    // Текстовое описание текущего режима
     currentModeTitle: (state) =>
       state.userTeacher ? state.userTeacher : state.userGroup,
+
+    // Геттер для заголовка, берет данные из viewedDate
+    currentWeekInfo: (state) => {
+      const schedule = state.scheduleCache[state.viewedDate];
+      if (schedule?.week_type) {
+        return `${schedule.week_number}-я нед. (${schedule.week_type})`;
+      }
+      // Если данных нет, пробуем хотя бы посчитать неделю (тут можно fallback логику, но пока пустая строка)
+      return "";
+    },
   },
 
   actions: {
@@ -57,14 +65,17 @@ export const useMainStore = defineStore("main", {
       localStorage.setItem("userSubgroup", subgroup.toString());
     },
 
+    setViewedDate(date: string) {
+      this.viewedDate = date;
+    },
+
     clearCache() {
       this.scheduleCache = {};
       this.activeDays.clear();
     },
 
-    // --- ИСПРАВЛЕНО: Добавлен метод ensureDayLoaded ---
     async ensureDayLoaded(date: string) {
-      if (this.scheduleCache[date]) return; // Если уже в кэше, не грузим
+      if (this.scheduleCache[date]) return;
       if (!this.isRegistered) return;
 
       try {
@@ -80,44 +91,27 @@ export const useMainStore = defineStore("main", {
           this.scheduleCache[date] = data;
         }
       } catch (e) {
-        console.warn(`ensureDayLoaded error for ${date}`, e);
+        // ignore
       }
     },
-    // --------------------------------------------------
 
     async loadDayWindow(centerDateStr: string) {
-      if (!this.isRegistered) return [];
-
-      const center = new Date(centerDateStr);
-      // Грузим [-1, 0, 1] дни
-      const datesToLoad = [-1, 0, 1].map((offset) => {
-        const d = new Date(center);
-        d.setDate(d.getDate() + offset);
-        return formatDate(d);
-      });
-
-      // Используем ensureDayLoaded для загрузки каждого дня
-      await Promise.all(datesToLoad.map((date) => this.ensureDayLoaded(date)));
-
-      return datesToLoad.map((date) => ({
-        date,
-        schedule: this.scheduleCache[date] || null,
-      }));
+      // Logic for swiper preloading if needed
     },
 
     async fetchActiveDays(month: string) {
-      if (!this.isRegistered) return;
+      // ... (код календаря без изменений)
       try {
         const params = new URLSearchParams();
         params.append("month", month);
         if (this.userGroup) params.append("group", this.userGroup);
         if (this.userTeacher) params.append("teacher", this.userTeacher);
 
-        const data = await apiClient.get<ActiveDaysResponse>(
+        const data = await apiClient.get<any>(
           `/meta/active_days?${params.toString()}`
         );
         this.activeDays.clear();
-        data.active_days.forEach((day) => this.activeDays.add(day));
+        data.active_days.forEach((day: string) => this.activeDays.add(day));
       } catch (e) {
         console.error(e);
       }

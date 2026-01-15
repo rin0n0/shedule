@@ -1,17 +1,23 @@
+export type LessonStatus = "ok" | "replacement" | "cancellation";
+
 export interface Lesson {
   lesson_number: number;
   subject: string;
   teacher: string;
-  group: string; // Новое: чтобы видеть, у какой группы пара (для режима преподавателя)
+  group?: string; // Для режима учителя
   subgroup: number;
-  is_replacement: boolean;
+
+  // Новые поля
+  is_stream: boolean;
+  status: LessonStatus;
+  group_list?: string[]; // Список групп (если поток)
 }
 
 export interface DaySchedule {
   day_name: string;
   lessons: Lesson[];
-  week_number?: number; // Новое
-  week_type?: string; // Новое: "Числитель" | "Знаменатель"
+  week_number?: number;
+  week_type?: string;
 }
 
 export type ScheduleCache = Record<string, DaySchedule>;

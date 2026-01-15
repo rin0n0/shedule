@@ -1,42 +1,26 @@
 <!-- src/views/ResponsiveControls.vue -->
 <template>
     <div class="controls-wrapper" :class="{ 'is-mobile': isMobile }">
-
-        <!-- HEADER: Кнопка-триггер -->
         <div class="status-bar" @click="$emit('openSettings')">
             <div class="info">
-                <!-- Показываем "Группу" или "Поиск...", если не выбрана -->
                 <h2 class="main-title">{{ mainStore.currentModeTitle || 'Настроить расписание' }}</h2>
-                <span class="week-info" v-if="weekInfo">{{ weekInfo }}</span>
+                <!-- Используем новый геттер -->
+                <span class="week-info" v-if="mainStore.currentWeekInfo">{{ mainStore.currentWeekInfo }}</span>
             </div>
             <div class="actions">
                 <button class="icon-btn" @click.stop="$emit('openCalendar')">📅</button>
-                <!-- Кнопка настроек -->
                 <button class="icon-btn setting-btn">⚙️</button>
             </div>
         </div>
-
-        <!-- ТУТ БОЛЬШЕ НЕТ ПОИСКА INLINE, ОН В МОДАЛКЕ -->
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useMainStore } from '@/stores/main_store';
-
-defineEmits(['openSettings', 'openCalendar']);
 
 const mainStore = useMainStore();
 const isMobile = ref(window.innerWidth < 768);
-
-const weekInfo = computed(() => {
-    const todayStr = new Date().toISOString().substring(0, 10);
-    const schedule = mainStore.getDaySchedule(todayStr);
-    if (schedule?.week_type) {
-        return `${schedule.week_number}-я нед. (${schedule.week_type})`;
-    }
-    return '';
-});
 
 onMounted(() => {
     window.addEventListener('resize', () => {
@@ -46,6 +30,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
+/* Стили остаются прежними */
 .controls-wrapper {
     background: var(--glass-bg);
     backdrop-filter: blur(20px);
@@ -56,7 +41,6 @@ onMounted(() => {
     transition: all 0.3s;
 }
 
-/* Mobile: Bottom Fixed */
 .controls-wrapper.is-mobile {
     position: fixed;
     bottom: 0;
@@ -65,10 +49,8 @@ onMounted(() => {
     border-radius: 20px 20px 0 0;
     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.3);
     padding-bottom: max(12px, env(safe-area-inset-bottom));
-    /* Для iPhone без кнопки */
 }
 
-/* Desktop: Top Sticky */
 .controls-wrapper:not(.is-mobile) {
     position: sticky;
     top: 20px;
@@ -116,9 +98,5 @@ onMounted(() => {
     display: flex;
     align-items: center;
     justify-content: center;
-}
-
-.icon-btn:active {
-    background: var(--accent-color);
 }
 </style>

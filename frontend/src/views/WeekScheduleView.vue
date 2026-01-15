@@ -1,40 +1,8 @@
 <!-- src/views/WeekScheduleView.vue -->
-<template>
-    <div class="week-view-container">
-        <!-- Навигация по неделям -->
-        <div class="week-nav">
-            <button class="nav-arrow" @click="changeWeek(-7)">←</button>
-            <span class="week-label">{{ weekDateRange }}</span>
-            <button class="nav-arrow" @click="changeWeek(7)">→</button>
-        </div>
-
-        <div class="grid-header">
-            <div v-for="day in weekDays" :key="day.date" class="header-cell" :class="{ 'is-today': day.isToday }">
-                <span class="weekday">{{ day.name }}</span>
-                <span class="date">{{ day.displayDate }}</span>
-            </div>
-        </div>
-
-        <div class="grid-body">
-            <div v-for="day in weekDays" :key="day.date" class="day-column">
-                <!-- ОГРАНИЧЕНИЕ: Только 5 пар -->
-                <div v-for="slot in 5" :key="slot" class="slot-cell">
-                    <div class="slot-num">{{ slot }}</div>
-                    <div class="lesson-content">
-                        <template v-if="getLesson(day.date, slot)">
-                            <LessonCard :lesson="getLesson(day.date, slot)!"
-                                @click="$emit('lessonClick', getLesson(day.date, slot)!)" />
-                        </template>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</template>
-
 <script setup lang="ts">
-import { computed, onMounted, watch } from 'vue';
-import { useRouter } from 'vue-router'; // Импорт роутера
+/* ...imports... */
+import { computed, watch } from 'vue';
+import { useRouter } from 'vue-router';
 import { useMainStore } from '@/stores/main_store';
 import LessonCard from '@/views/LessonCard.vue';
 import type { Lesson } from '@/types';
@@ -44,11 +12,10 @@ const emit = defineEmits(['lessonClick']);
 const mainStore = useMainStore();
 const router = useRouter();
 
-// Генерация недели (ПН-СБ) на основе centerDate
+// ... (weekDays calculation тот же) ...
 const weekDays = computed(() => {
     const current = new Date(props.centerDate);
     const day = current.getDay() || 7;
-    // Сдвигаем на понедельник
     const monday = new Date(current);
     monday.setDate(current.getDate() - (day - 1));
 
@@ -77,29 +44,62 @@ const weekDateRange = computed(() => {
 const changeWeek = (days: number) => {
     const current = new Date(props.centerDate);
     current.setDate(current.getDate() + days);
-    const newDateStr = current.toISOString().substring(0, 10);
-    router.push({ params: { date: newDateStr } });
+    router.push({ params: { date: current.toISOString().substring(0, 10) } });
 };
 
 const getLesson = (date: string, num: number): Lesson | undefined => {
     const schedule = mainStore.getDaySchedule(date);
     if (!schedule) return undefined;
 
-    // Улучшенный поиск пары (учет подгрупп)
-    const lesson = schedule.lessons.find(l =>
+    // Улучшенный поиск пары
+    return schedule.lessons.find(l =>
         l.lesson_number === num &&
         (mainStore.userSubgroup === 0 || l.subgroup === 0 || l.subgroup === mainStore.userSubgroup)
     );
-    return lesson;
 };
 
-// Загрузка данных при смене недели
-watch(() => props.centerDate, () => {
+// === ВАЖНО: Обновляем Store при смене недели ===
+watch(() => props.centerDate, (newDate) => {
     weekDays.value.forEach(d => mainStore.ensureDayLoaded(d.date));
+    mainStore.setViewedDate(newDate); // Сообщаем стору, что мы смотрим эту дату
 }, { immediate: true });
 </script>
 
+<!-- Template оставляем тот же, что в прошлом ответе, он был ок -->
+<template>
+    <div class="week-view-container">
+        <div class="week-nav">
+            <button class="nav-arrow" @click="changeWeek(-7)">←</button>
+            <span class="week-label">{{ weekDateRange }}</span>
+            <button class="nav-arrow" @click="changeWeek(7)">→</button>
+        </div>
+
+        <div class="grid-header">
+            <div v-for="day in weekDays" :key="day.date" class="header-cell" :class="{ 'is-today': day.isToday }">
+                <span class="weekday">{{ day.name }}</span>
+                <span class="date">{{ day.displayDate }}</span>
+            </div>
+        </div>
+
+        <div class="grid-body">
+            <div v-for="day in weekDays" :key="day.date" class="day-column">
+                <!-- Фиксируем 5 пар -->
+                <div v-for="slot in 5" :key="slot" class="slot-cell">
+                    <div class="slot-num">{{ slot }}</div>
+                    <div class="lesson-content">
+                        <template v-if="getLesson(day.date, slot)">
+                            <LessonCard :lesson="getLesson(day.date, slot)!"
+                                @click="$emit('lessonClick', getLesson(day.date, slot)!)" />
+                        </template>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</template>
+
 <style scoped>
+/* CSS из прошлого ответа, можно оставить */
 .week-view-container {
     height: 100%;
     overflow-y: auto;
@@ -124,15 +124,9 @@ watch(() => props.centerDate, () => {
     height: 32px;
     border-radius: 50%;
     cursor: pointer;
-    transition: 0.2s;
-}
-
-.nav-arrow:hover {
-    background: var(--accent-color);
 }
 
 .week-label {
-    font-size: 16px;
     font-weight: 600;
     color: var(--text-primary);
 }
@@ -149,7 +143,6 @@ watch(() => props.centerDate, () => {
     padding: 10px;
     border-radius: 12px;
     text-align: center;
-    border: 1px solid transparent;
 }
 
 .header-cell.is-today {
@@ -174,7 +167,6 @@ watch(() => props.centerDate, () => {
     grid-template-columns: repeat(6, 1fr);
     gap: 10px;
     flex: 1;
-    /* Занимает оставшееся место */
 }
 
 .day-column {
@@ -187,10 +179,12 @@ watch(() => props.centerDate, () => {
     background: var(--card-bg);
     border: 1px solid var(--card-border);
     border-radius: 12px;
-    /* Высота ячейки фиксированная или минимальная */
     height: 110px;
+    /* Фиксированная высота */
     padding: 5px;
     position: relative;
+    overflow: hidden;
+    /* Гарантия того, что не вылезет */
 }
 
 .slot-num {
@@ -205,6 +199,5 @@ watch(() => props.centerDate, () => {
 .lesson-content {
     height: 100%;
     padding-left: 15px;
-    /* Отступ под номер пары */
 }
 </style>

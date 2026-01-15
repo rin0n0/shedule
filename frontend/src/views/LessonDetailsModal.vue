@@ -12,7 +12,7 @@
 
                 <div class="row">
                     <span class="icon">👨‍🏫</span>
-                    <span class="value">{{ lesson.teacher || 'Преподаватель не указан' }}</span>
+                    <span class="value">{{ lesson.teacher || 'Нет данных' }}</span>
                 </div>
 
                 <div class="row" v-if="lesson.group">
@@ -20,8 +20,8 @@
                     <span class="value">Группа {{ lesson.group }}</span>
                 </div>
 
-                <!-- Статусы -->
-                <div v-if="lesson.is_replacement" class="status-block replacement">
+                <!-- БЛОК ЗАМЕНЫ (Желтый) -->
+                <div v-if="lesson.status === 'replacement'" class="status-block replacement">
                     <span class="status-icon">🔥</span>
                     <div class="status-text">
                         <strong>Замена</strong>
@@ -29,7 +29,8 @@
                     </div>
                 </div>
 
-                <div v-if="isCancelled" class="status-block cancelled">
+                <!-- БЛОК ОТМЕНЫ (Красный) -->
+                <div v-if="lesson.status === 'cancellation'" class="status-block cancelled">
                     <span class="status-icon">❌</span>
                     <div class="status-text">
                         <strong>Пара отменена</strong>
@@ -42,21 +43,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
 import type { Lesson } from '@/types';
 
-const props = defineProps<{ lesson: Lesson }>();
+defineProps<{ lesson: Lesson }>();
 defineEmits(['close']);
-
-const isCancelled = computed(() => props.lesson.subject.toLowerCase().includes('отмена'));
 </script>
 
 <style scoped>
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(5px);
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
     z-index: 200;
     display: flex;
     justify-content: center;
@@ -65,13 +63,12 @@ const isCancelled = computed(() => props.lesson.subject.toLowerCase().includes('
 }
 
 .modal-card {
-    background: #1c1c1e;
-    /* Темный фон iOS */
+    background: var(--bg-color);
     width: 90%;
     max-width: 350px;
     border-radius: 20px;
     padding: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--border-color);
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
     animation: scaleUp 0.2s;
 }
@@ -94,7 +91,7 @@ const isCancelled = computed(() => props.lesson.subject.toLowerCase().includes('
 .close-btn {
     background: none;
     border: none;
-    color: var(--text-secondary);
+    color: #8e8e93;
     font-size: 20px;
     cursor: pointer;
 }
@@ -112,43 +109,49 @@ const isCancelled = computed(() => props.lesson.subject.toLowerCase().includes('
     gap: 12px;
     margin-bottom: 12px;
     font-size: 15px;
-    color: var(--text-secondary);
+    color: #aeaeb2;
 }
 
 .icon {
     font-size: 18px;
+    width: 24px;
+    text-align: center;
 }
 
 /* Статусные блоки */
 .status-block {
-    margin-top: 20px;
-    padding: 12px;
+    margin-top: 25px;
+    padding: 15px;
     border-radius: 12px;
     display: flex;
-    gap: 12px;
+    gap: 15px;
     align-items: flex-start;
 }
 
 .replacement {
-    background: rgba(255, 149, 0, 0.15);
+    background: rgba(255, 159, 10, 0.15);
+    /* Orange/Yellow alpha */
+    border: 1px solid rgba(255, 159, 10, 0.3);
     color: #ff9f0a;
 }
 
 .cancelled {
-    background: rgba(255, 59, 48, 0.15);
+    background: rgba(255, 69, 58, 0.15);
+    /* Red alpha */
+    border: 1px solid rgba(255, 69, 58, 0.3);
     color: #ff453a;
 }
 
 .status-text strong {
     display: block;
-    margin-bottom: 2px;
-    font-size: 14px;
+    margin-bottom: 4px;
+    font-size: 15px;
 }
 
 .status-text p {
     margin: 0;
-    font-size: 12px;
-    opacity: 0.8;
+    font-size: 13px;
+    opacity: 0.9;
 }
 
 @keyframes fadeIn {
