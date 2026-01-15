@@ -2,138 +2,136 @@ import { defineStore } from "pinia";
 import type {
   ScheduleCache,
   DaySchedule,
-  SearchGroupsResponse,
+  SearchResponse,
   ActiveDaysResponse,
 } from "@/types";
+import { apiClient } from "@/api/index";
 
-const API_BASE_URL = "/api";
-
-const apiClient = {
-  async get<T>(endpoint: string): Promise<T> {
-    const response = await fetch(`${endpoint}`);
-    if (!response.ok) {
-      // Игнорируем 404, чтобы не крашить приложение, если расписания просто нет
-      if (response.status === 404) return null as any;
-      throw new Error(`Error ${response.status}`);
-    }
-    return response.json() as Promise<T>;
-  },
-};
-
-const generateUUID = () => crypto.randomUUID();
-// Хелпер для дат
 const formatDate = (date: Date): string => date.toISOString().substring(0, 10);
 
 export const useMainStore = defineStore("main", {
   state: () => ({
     userGroup: null as string | null,
-    userId: null as string | null,
+    userTeacher: null as string | null,
     userSubgroup: 0,
     scheduleCache: {} as ScheduleCache,
     activeDays: new Set<string>(),
     isLoading: false,
-    error: null as string | null,
   }),
 
   getters: {
-    isRegistered: (state): boolean => !!state.userGroup,
+    // Зарегистрирован, если есть группа ИЛИ учитель
+    isRegistered: (state): boolean => !!state.userGroup || !!state.userTeacher,
     getDaySchedule: (state) => (date: string) => state.scheduleCache[date],
-    isRegistredSubgroup: (state): boolean => state.userSubgroup == 0,
+    // Текстовое описание текущего режима
+    currentModeTitle: (state) =>
+      state.userTeacher ? state.userTeacher : state.userGroup,
   },
 
   actions: {
     initializeStore() {
-      const storedGroup = localStorage.getItem("userGroup");
-      const storedSubgroup = localStorage.getItem("userSubgroup");
-      const storedUserId = localStorage.getItem("userId");
-      if (storedGroup && storedUserId) {
-        this.userGroup = storedGroup;
-        this.userId = storedUserId;
-        this.userSubgroup = storedSubgroup ? parseInt(storedSubgroup) : 0;
-      }
+      this.userGroup = localStorage.getItem("userGroup");
+      this.userTeacher = localStorage.getItem("userTeacher");
+      const sub = localStorage.getItem("userSubgroup");
+      this.userSubgroup = sub ? parseInt(sub) : 0;
     },
 
-    registerGroup(group: string) {
+    setGroup(group: string) {
       this.userGroup = group;
-      this.userId = generateUUID();
-      this.userSubgroup = 0;
-      localStorage.setItem("userGroup", this.userGroup);
-      localStorage.setItem("userId", this.userId);
-      localStorage.setItem("userSubgroup", "0");
+      this.userTeacher = null;
+      localStorage.setItem("userGroup", group);
+      localStorage.removeItem("userTeacher");
+      this.clearCache();
     },
+
+    setTeacher(teacher: string) {
+      this.userTeacher = teacher;
+      this.userGroup = null;
+      localStorage.setItem("userTeacher", teacher);
+      localStorage.removeItem("userGroup");
+      this.clearCache();
+    },
+
     setSubgroup(subgroup: number) {
       this.userSubgroup = subgroup;
       localStorage.setItem("userSubgroup", subgroup.toString());
     },
-    // === НОВЫЙ ЭКШН ДЛЯ СВАЙПЕРА ===
+
+    clearCache() {
+      this.scheduleCache = {};
+      this.activeDays.clear();
+    },
+
+    // --- ИСПРАВЛЕНО: Добавлен метод ensureDayLoaded ---
+    async ensureDayLoaded(date: string) {
+      if (this.scheduleCache[date]) return; // Если уже в кэше, не грузим
+      if (!this.isRegistered) return;
+
+      try {
+        const params = new URLSearchParams();
+        params.append("date", date);
+        if (this.userGroup) params.append("group", this.userGroup);
+        if (this.userTeacher) params.append("teacher", this.userTeacher);
+
+        const data = await apiClient.get<DaySchedule>(
+          `/schedule/day?${params.toString()}`
+        );
+        if (data) {
+          this.scheduleCache[date] = data;
+        }
+      } catch (e) {
+        console.warn(`ensureDayLoaded error for ${date}`, e);
+      }
+    },
+    // --------------------------------------------------
+
     async loadDayWindow(centerDateStr: string) {
-      if (!this.userGroup) return [];
+      if (!this.isRegistered) return [];
 
       const center = new Date(centerDateStr);
-      // Генерируем даты [-1, 0, 1]
+      // Грузим [-1, 0, 1] дни
       const datesToLoad = [-1, 0, 1].map((offset) => {
         const d = new Date(center);
         d.setDate(d.getDate() + offset);
         return formatDate(d);
       });
 
-      // Грузим параллельно, пропуская те, что уже в кэше
-      const promises = datesToLoad.map(async (date) => {
-        if (this.scheduleCache[date]) return; // Уже есть
+      // Используем ensureDayLoaded для загрузки каждого дня
+      await Promise.all(datesToLoad.map((date) => this.ensureDayLoaded(date)));
 
-        try {
-          const endpoint = `/api/schedule/day?group=${this.userGroup}&date=${date}`;
-          const data = await apiClient.get<DaySchedule>(endpoint);
-          if (data) {
-            this.scheduleCache[date] = data;
-          }
-        } catch (e) {
-          console.warn(`Failed to load ${date}`, e);
-        }
-      });
-
-      await Promise.all(promises);
-
-      // Возвращаем готовый массив для слайдов
       return datesToLoad.map((date) => ({
         date,
         schedule: this.scheduleCache[date] || null,
       }));
     },
 
-    // Одиночная загрузка (для подгрузки при скролле)
-    async ensureDayLoaded(date: string) {
-      if (this.scheduleCache[date]) return;
-      try {
-        const endpoint = `/api/schedule/day?group=${this.userGroup}&date=${date}`;
-        const data = await apiClient.get<DaySchedule>(endpoint);
-        if (data) this.scheduleCache[date] = data;
-      } catch (e) {
-        console.warn(e);
-      }
-    },
-
     async fetchActiveDays(month: string) {
-      if (!this.userGroup) return;
+      if (!this.isRegistered) return;
       try {
-        const endpoint = `/api/meta/active_days?group=${this.userGroup}&month=${month}`;
-        const data = await apiClient.get<ActiveDaysResponse>(endpoint);
+        const params = new URLSearchParams();
+        params.append("month", month);
+        if (this.userGroup) params.append("group", this.userGroup);
+        if (this.userTeacher) params.append("teacher", this.userTeacher);
+
+        const data = await apiClient.get<ActiveDaysResponse>(
+          `/meta/active_days?${params.toString()}`
+        );
         this.activeDays.clear();
-        data.active_days.forEach((day: string) => this.activeDays.add(day));
-      } catch (e: any) {
-        console.error(`Ошибка календаря:`, e);
+        data.active_days.forEach((day) => this.activeDays.add(day));
+      } catch (e) {
+        console.error(e);
       }
     },
 
-    async searchGroups(query: string): Promise<string[]> {
+    async search(query: string, type: "group" | "teacher"): Promise<string[]> {
       if (query.length < 2) return [];
       this.isLoading = true;
       try {
-        const endpoint = `/api/groups/search?query=${query}`;
-        const data = await apiClient.get<SearchGroupsResponse>(endpoint);
-        return data.groups;
-      } catch (e: any) {
-        console.error(e);
+        const endpoint =
+          type === "group" ? "/groups/search" : "/teachers/search";
+        const data = await apiClient.get<any>(`${endpoint}?query=${query}`);
+        return type === "group" ? data.groups : data.teachers;
+      } catch (e) {
         return [];
       } finally {
         this.isLoading = false;

@@ -1,3 +1,4 @@
+<!-- src/views/SettingsModal.vue -->
 <template>
     <div class="modal-overlay" @click.self="$emit('close')">
         <div class="modal-card">
@@ -6,318 +7,193 @@
                 <button class="close-btn" @click="$emit('close')">✕</button>
             </div>
 
-            <div class="content">
-                <!-- СЕКЦИЯ 1: ГРУППА -->
-                <div class="setting-block">
-                    <label>Твоя группа</label>
-                    <div class="input-wrapper">
-                        <input type="text" v-model="groupInput" @input="handleSearch" @keydown.enter="saveSettings"
-                            placeholder="Начни вводить..." :class="{ 'loading': mainStore.isLoading }" />
-                        <span v-if="mainStore.isLoading" class="spinner"></span>
-                    </div>
+            <div class="tabs">
+                <button :class="{ active: mode === 'group' }" @click="mode = 'group'">Студент</button>
+                <button :class="{ active: mode === 'teacher' }" @click="mode = 'teacher'">Преподаватель</button>
+            </div>
 
-                    <!-- Подсказки (появляются при вводе) -->
-                    <ul v-if="searchResults.length > 0" class="results">
-                        <li v-for="g in searchResults" :key="g" @click="selectGroup(g)">
-                            {{ g }}
-                        </li>
-                    </ul>
+            <div class="input-wrapper">
+                <input type="text" v-model="query" @input="handleSearch"
+                    :placeholder="mode === 'group' ? 'Номер группы (222...)' : 'Фамилия преподавателя'" autofocus />
+                <ul v-if="results.length" class="results-list">
+                    <li v-for="item in results" :key="item" @click="selectItem(item)">
+                        {{ item }}
+                    </li>
+                </ul>
+            </div>
+
+            <!-- Подгруппы (только для студента) -->
+            <div class="subgroups" v-if="mode === 'group' && mainStore.userGroup">
+                <label>Подгруппа:</label>
+                <div class="toggles">
+                    <button v-for="sub in [0, 1, 2]" :key="sub" :class="{ active: mainStore.userSubgroup === sub }"
+                        @click="mainStore.setSubgroup(sub)">{{ sub === 0 ? 'Все' : sub }}</button>
                 </div>
+            </div>
 
-                <!-- СЕКЦИЯ 2: ПОДГРУППА -->
-                <div class="setting-block">
-                    <label>Подгруппа</label>
-                    <div class="subgroup-toggles">
-                        <button v-for="opt in subgroupOptions" :key="opt.value" class="toggle-btn"
-                            :class="{ active: selectedSubgroup === opt.value }" @click="selectedSubgroup = opt.value">
-                            {{ opt.label }}
-                        </button>
-                    </div>
-                    <p class="hint">Пары для всей группы показываются всегда.</p>
-                </div>
-
-                <button class="save-btn" @click="saveSettings">
-                    Сохранить
-                </button>
-
-                <p class="credits">
-                    Polytech Schedule v1.1<br>
-                    Суверенная разработка 🇷🇺
-                </p>
+            <div class="footer-note">
+                <p>Polytech Schedule v1.2</p>
             </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref } from 'vue';
 import { useMainStore } from '@/stores/main_store';
 
 const emit = defineEmits(['close']);
 const mainStore = useMainStore();
+const mode = ref<'group' | 'teacher'>(mainStore.userTeacher ? 'teacher' : 'group');
+const query = ref('');
+const results = ref<string[]>([]);
+let timer: number;
 
-// Локальное состояние формы
-const groupInput = ref('');
-const selectedSubgroup = ref(0);
-const searchResults = ref<string[]>([]);
-let searchTimeout: number;
-
-const subgroupOptions = [
-    { label: 'Все', value: 0 },
-    { label: '1', value: 1 },
-    { label: '2', value: 2 }
-];
-
-// Инициализация данными из стора
-onMounted(() => {
-    groupInput.value = mainStore.userGroup || '';
-    selectedSubgroup.value = mainStore.userSubgroup;
-});
-
-// Логика поиска (как в регистрации)
 const handleSearch = () => {
-    clearTimeout(searchTimeout);
-    if (groupInput.value.length < 2) {
-        searchResults.value = [];
-        return;
-    }
-    searchTimeout = setTimeout(async () => {
-        searchResults.value = await mainStore.searchGroups(groupInput.value);
+    clearTimeout(timer);
+    if (query.value.length < 2) { results.value = []; return; }
+
+    timer = setTimeout(async () => {
+        results.value = await mainStore.search(query.value, mode.value);
     }, 300);
-}
+};
 
-const selectGroup = (g: string) => {
-    groupInput.value = g;
-    searchResults.value = []; // Скрываем список после выбора
-}
-
-// Сохранение
-const saveSettings = () => {
-    // 1. Если группа изменилась — регистрируем новую
-    if (groupInput.value !== mainStore.userGroup) {
-        mainStore.registerGroup(groupInput.value);
-        // При смене группы кэш расписания инвалидируется (надо будет перезагрузить страницу или очистить кэш)
-        // Самый простой способ обновить все — перезагрузить страницу
-        window.location.reload();
-        return;
-    }
-
-    // 2. Сохраняем подгруппу
-    if (selectedSubgroup.value !== mainStore.userSubgroup) {
-        mainStore.setSubgroup(selectedSubgroup.value);
-    }
+const selectItem = (item: string) => {
+    if (mode.value === 'group') mainStore.setGroup(item);
+    else mainStore.setTeacher(item);
 
     emit('close');
+    // Небольшой хак для обновления данных
+    setTimeout(() => window.location.reload(), 50);
 };
 </script>
 
 <style scoped>
 .modal-overlay {
     position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.3);
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-    z-index: 100;
+    z-index: 200;
     display: flex;
-    align-items: center;
     justify-content: center;
-    animation: fadeIn 0.2s ease-out;
+    align-items: flex-start;
+    /* Чтобы на мобилке клавиатура не перекрывала */
+    padding-top: 100px;
 }
 
 .modal-card {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 24px;
-    padding: 25px;
+    background: #1c1c1e;
     width: 90%;
-    max-width: 350px;
-    animation: slideUp 0.3s ease-out;
-    overflow: visible;
-    position: relative;
+    max-width: 400px;
+    border-radius: 20px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .modal-header {
     display: flex;
     justify-content: space-between;
-    align-items: center;
     margin-bottom: 20px;
-}
-
-.modal-header h3 {
-    margin: 0;
-    color: var(--text-primary);
+    color: white;
 }
 
 .close-btn {
     background: none;
     border: none;
-    color: var(--text-secondary);
     font-size: 24px;
-    padding: 0;
+    color: gray;
     cursor: pointer;
 }
 
-.setting-block {
+.tabs {
+    display: flex;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 4px;
+    border-radius: 10px;
     margin-bottom: 20px;
-    position: relative;
 }
 
-.setting-block label {
-    display: block;
-    margin-bottom: 8px;
-    color: var(--text-secondary);
-    font-size: 14px;
+.tabs button {
+    flex: 1;
+    background: none;
+    border: none;
+    padding: 8px;
+    color: gray;
+    border-radius: 8px;
+    cursor: pointer;
 }
 
-/* Инпут */
+.tabs button.active {
+    background: #3a3a3c;
+    color: white;
+}
+
 .input-wrapper {
     position: relative;
-    z-index: 20;
+    margin-bottom: 20px;
 }
 
 input {
     width: 100%;
     padding: 12px;
-    border-radius: 12px;
-    border: 1px solid var(--card-border);
-    background: var(--row-border);
-    color: var(--text-primary);
+    border-radius: 10px;
+    border: 1px solid #3a3a3c;
+    background: #2c2c2e;
+    color: white;
     font-size: 16px;
-    outline: none;
     box-sizing: border-box;
 }
 
-input:focus {
+.results-list {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    width: 100%;
+    background: #2c2c2e;
+    border-radius: 10px;
+    list-style: none;
+    padding: 0;
+    margin-top: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    z-index: 10;
+    border: 1px solid #3a3a3c;
+}
+
+.results-list li {
+    padding: 12px;
+    border-bottom: 1px solid #3a3a3c;
+    color: white;
+}
+
+.subgroups {
+    color: gray;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.toggles button {
+    background: #2c2c2e;
+    border: 1px solid #3a3a3c;
+    color: gray;
+    padding: 6px 12px;
+    border-radius: 6px;
+    margin-left: 5px;
+    cursor: pointer;
+}
+
+.toggles button.active {
+    background: var(--accent-color);
+    color: white;
     border-color: var(--accent-color);
 }
 
-/* Спиннер в инпуте */
-.spinner {
-    position: absolute;
-    right: 12px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    border: 2px solid var(--card-border);
-    border-top-color: var(--text-primary);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-/* Результаты поиска */
-.results {
-    list-style: none;
-    padding: 0;
-    margin: 5px 0 0 0;
-    max-height: 200px;
-    overflow-y: auto;
-    background: var(--card-bg);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-radius: 12px;
-    border: 1px solid var(--card-border);
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
-    position: absolute;
-    width: 100%;
-    top: 100%;
-    left: 0;
-    z-index: 100;
-}
-
-.results li {
-    padding: 12px 16px;
-    cursor: pointer;
-    border-bottom: 1px solid var(--row-border);
-    color: var(--text-primary);
-}
-
-.results li:hover {
-    background: var(--accent-color);
-    color: white;
-}
-
-.results li:last-child {
-    border-bottom: none;
-}
-
-/* Переключатели подгрупп */
-.subgroup-toggles {
-    display: flex;
-    gap: 10px;
-    position: relative;
-    z-index: 10;
-}
-
-.toggle-btn {
-    flex: 1;
-    padding: 10px;
-    border: 1px solid transparent;
-    /* Убрали рамку по умолчанию */
-    background: var(--row-border);
-    color: var(--text-secondary);
-    border-radius: 10px;
-    cursor: pointer;
-    transition: 0.2s;
-}
-
-.toggle-btn.active {
-    background: var(--accent-color);
-    color: white;
-}
-
-.hint {
-    font-size: 11px;
-    color: var(--text-tertiary);
-    margin-top: 5px;
-    font-style: italic;
-}
-
-.save-btn {
-    width: 100%;
-    padding: 14px;
-    border: none;
-    background: var(--accent-color);
-    color: white;
-    border-radius: 12px;
-    font-size: 16px;
-    font-weight: bold;
-    cursor: pointer;
-    margin-top: 10px;
-    position: relative;
-    z-index: 10;
-}
-
-.save-btn:active {
-    opacity: 0.9;
-    transform: scale(0.98);
-}
-
-.credits {
-    margin-top: 20px;
+.footer-note {
     text-align: center;
-    color: var(--text-tertiary);
-    font-size: 12px;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
-
-@keyframes slideUp {
-    from {
-        transform: translateY(20px);
-        opacity: 0;
-    }
-
-    to {
-        opacity: 1;
-    }
+    color: #555;
+    font-size: 10px;
+    margin-top: 20px;
 }
 </style>

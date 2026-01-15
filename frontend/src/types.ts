@@ -1,43 +1,26 @@
-// src/types.ts
-
-/**
- * Описывает одну пару (урок).
- * Это самая маленькая единица нашего расписания.
- */
 export interface Lesson {
   lesson_number: number;
   subject: string;
   teacher: string;
+  group: string; // Новое: чтобы видеть, у какой группы пара (для режима преподавателя)
   subgroup: number;
   is_replacement: boolean;
 }
 
-/**
- * Описывает расписание на один конкретный день.
- */
 export interface DaySchedule {
   day_name: string;
   lessons: Lesson[];
+  week_number?: number; // Новое
+  week_type?: string; // Новое: "Числитель" | "Знаменатель"
 }
 
-/**
- * Описывает структуру кэша расписания в нашем хранилище.
- * Ключ - это дата в формате "YYYY-MM-DD".
- */
 export type ScheduleCache = Record<string, DaySchedule>;
 
-// --- Типы для ответов API ---
-
-/**
- * Ответ от эндпоинта /api/groups/search
- */
-export interface SearchGroupsResponse {
-  groups: string[];
+export interface SearchResponse {
+  groups?: string[];
+  teachers?: string[];
 }
 
-/**
- * Ответ от эндпоинта /api/meta/active_days
- */
 export interface ActiveDaysResponse {
   active_days: string[];
 }

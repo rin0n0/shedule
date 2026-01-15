@@ -1,105 +1,138 @@
+<!-- src/views/LessonCard.vue -->
 <template>
-    <div class="lesson-card-content" :class="{ compact: isCompact }">
-        <div class="info-col">
-            <div v-if="lesson.subgroup && mainStore.userSubgroup === 0" class="subject">{{ lesson.subject }}
-                ({{
-                    lesson.subgroup }})</div>
-            <div v-else class="subject">{{ lesson.subject }}</div>
-            <div class="meta">
-                <span class="teacher" v-if="lesson.teacher">{{ lesson.teacher }}</span>
+    <div class="lesson-card" :class="{ 'is-stream': isStream, 'is-cancelled': isCancelled }" @click="$emit('click')">
+        <div class="card-content">
+            <div class="header-row">
+                <span class="subject-name">{{ lesson.subject }}</span>
+                <!-- Иконка замены (огонек), если замена и не отмена -->
+                <span v-if="lesson.is_replacement && !isCancelled" class="status-icon">🔥</span>
+                <span v-if="isCancelled" class="status-icon">❌</span>
             </div>
-        </div>
 
-        <div class="badges-col">
-            <div v-if="lesson.is_replacement" class="badge replacement">🔥</div>
+            <div class="footer-row">
+                <span v-if="!mainStore.userTeacher" class="teacher-name">{{ lesson.teacher }}</span>
+                <span v-else class="teacher-name">{{ lesson.group }}</span>
+
+                <div class="badges">
+                    <span v-if="isStream" class="badge stream">Поток</span>
+                    <span v-if="lesson.subgroup !== 0" class="badge sub">Подгр. {{ lesson.subgroup }}</span>
+                </div>
+            </div>
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue';
 import type { Lesson } from '@/types';
 import { useMainStore } from '@/stores/main_store';
 
+const props = defineProps<{ lesson: Lesson }>();
 const mainStore = useMainStore();
-defineProps<{
-    lesson: Lesson,
-    isCompact?: boolean
-}>();
+
+const isStream = computed(() => props.lesson.subgroup === 0);
+const isCancelled = computed(() => props.lesson.subject.toLowerCase().includes('отмена'));
+
+defineEmits(['click']);
 </script>
 
 <style scoped>
-.lesson-card-content {
+.lesson-card {
+    background: rgba(255, 255, 255, 0.05);
+    /* Очень легкий фон */
+    border-radius: 12px;
+    padding: 10px;
+    height: 100%;
+    transition: background 0.2s, transform 0.1s;
+    cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
-    /* Вертикальное расположение */
-    justify-content: center;
-    /* Центрирование по вертикали */
-    gap: 6px;
-    width: 100%;
+}
+
+.lesson-card:active {
+    transform: scale(0.98);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* Стиль для отмены: серый и полупрозрачный */
+.lesson-card.is-cancelled {
+    opacity: 0.6;
+    background: rgba(255, 59, 48, 0.1);
+    /* Легкий красный оттенок */
+}
+
+/* Стиль для потока: легкий акцент слева */
+.lesson-card.is-stream {
+    border-left: 3px solid var(--accent-color);
+    background: linear-gradient(90deg, rgba(10, 132, 255, 0.05) 0%, transparent 50%);
+}
+
+.card-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     height: 100%;
-    box-sizing: border-box;
-    padding: 5px 0;
-    /* Небольшие вертикальные отступы для баланса */
+    gap: 4px;
 }
 
-.info-col {
-    overflow: hidden;
+.header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 5px;
 }
 
-.subject {
-    font-size: 15px;
+.subject-name {
+    font-size: 13px;
     font-weight: 600;
     line-height: 1.3;
     color: var(--text-primary);
-    /* Разрешаем перенос до 3 строк */
     display: -webkit-box;
     -webkit-line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
 
-.meta {
-    font-size: 13px;
-    color: var(--text-secondary);
+.status-icon {
+    font-size: 14px;
 }
 
-.badges-col {
+.footer-row {
     display: flex;
-    position: absolute;
-    /* Позиционируем относительно ячейки */
-    top: 15px;
-    right: 15px;
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: auto;
+}
+
+.teacher-name {
+    font-size: 11px;
+    color: var(--text-secondary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 60%;
+}
+
+.badges {
+    display: flex;
+    gap: 4px;
 }
 
 .badge {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: bold;
+    font-size: 9px;
+    padding: 2px 5px;
+    border-radius: 4px;
+    font-weight: 600;
 }
 
-.badge.replacement {
-    background: #ff3b30;
-    color: white;
+.badge.stream {
+    background: rgba(10, 132, 255, 0.2);
+    color: var(--accent-color);
 }
 
-/* Компактный вид для сплит-пар */
-.compact {
-    padding: 5px 10px;
-    /* Отступы для сплит-ячеек */
-}
-
-.compact .subject {
-    font-size: 14px;
-    -webkit-line-clamp: 4;
-    /* Позволяем больше строк в сплите */
-}
-
-.compact .meta {
-    font-size: 12px;
+.badge.sub {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text-secondary);
 }
 </style>
