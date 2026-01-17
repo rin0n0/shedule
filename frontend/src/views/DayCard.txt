@@ -6,28 +6,29 @@
                 <span class="day-date">{{ formatDateReadable(date) }}</span>
             </header>
 
-            <!-- ЕДИНЫЙ МОНОЛИТНЫЙ БЛОК ДЛЯ ПАР -->
             <div class="lessons-block">
                 <div v-if="!schedule || !schedule.lessons || schedule.lessons.length === 0" class="empty-state">
-
+                    <!-- Можно добавить заглушку "Пар нет" -->
                 </div>
 
-                <!-- Используем ЧИСТЫЙ CSS GRID -->
                 <div v-else class="lessons-grid">
                     <template v-for="(slot, index) in filledSchedule" :key="slot.num">
 
-                        <!-- Ряд в гриде -->
                         <div class="grid-row">
-                            <!-- Ячейка 1: Номер -->
+                            <!-- Время/Номер -->
                             <div class="time-cell">{{ slot.num }}</div>
 
-                            <!-- Ячейка 2: Контент -->
+                            <!-- Контент -->
                             <div class="content-cell">
                                 <div v-if="slot.isEmpty" class="empty-text"></div>
-                                <LessonCard v-else-if="slot.lessons.length === 1" :lesson="slot.lessons[0]!" />
+
+                                <!-- ОДНА ПАРА -->
+                                <LessonCard v-if="slot.lessons.length === 1" :lesson="slot.lessons[0]!"
+                                    :date="props.date" @lessonClick="(payload) => $emit('lessonClick', payload)" />
                                 <div v-else class="split-content">
                                     <LessonCard v-for="(lesson, i) in slot.lessons" :key="i" :lesson="lesson"
-                                        is-compact />
+                                        :date="props.date" is-compact
+                                        @lessonClick="(payload) => $emit('lessonClick', payload)" />
                                 </div>
                             </div>
                         </div>
@@ -48,15 +49,15 @@ import { useMainStore } from '@/stores/main_store';
 const mainStore = useMainStore();
 const props = defineProps<{ schedule: DaySchedule | null, date: string }>();
 
+// === ВАЖНО: Объявляем, что этот компонент может испускать событие ===
+defineEmits(['lessonClick']);
+
 interface ScheduleSlot {
     num: number;
     isEmpty: boolean;
     lessons: Lesson[];
 }
 
-// === УЛУЧШЕННАЯ ЛОГИКА ===
-
-// 1. Сначала фильтруем уроки по подгруппе
 const filteredLessons = computed(() => {
     if (!props.schedule?.lessons) return [];
     return props.schedule.lessons.filter(lesson => {
@@ -65,15 +66,12 @@ const filteredLessons = computed(() => {
     });
 });
 
-// 2. Проверяем, пустой ли день ПОСЛЕ фильтрации
 const isEffectivelyEmpty = computed(() => {
-    // Если расписания нет ИЛИ отфильтрованный список пуст
     return !props.schedule || filteredLessons.value.length === 0;
 });
 
-// 3. Заполняем сетку на основе отфильтрованных данных
 const filledSchedule = computed<ScheduleSlot[]>(() => {
-    if (isEffectivelyEmpty.value) return []; // Если день пуст, нечего и заполнять
+    if (isEffectivelyEmpty.value) return [];
 
     const groups: Record<number, Lesson[]> = {};
     let maxPairNum = 0;
@@ -84,6 +82,7 @@ const filledSchedule = computed<ScheduleSlot[]>(() => {
         groups[num]!.push(lesson);
     });
 
+    // Ограничим 5 парами, как договорились, или динамически
     const totalSlots = Math.max(maxPairNum, 5);
     const result: ScheduleSlot[] = [];
 
@@ -105,6 +104,7 @@ const getDayName = (dateStr: string) => {
 </script>
 
 <style scoped>
+/* Стили оставляем те же, что и были в предыдущих шагах */
 .day-card-container {
     width: 100%;
     height: 100%;
@@ -143,6 +143,7 @@ const getDayName = (dateStr: string) => {
 
 .lessons-block {
     background: var(--card-bg);
+    /* Используем переменную темы */
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--card-border);
@@ -150,33 +151,26 @@ const getDayName = (dateStr: string) => {
     overflow: hidden;
 }
 
-/* === НОВЫЙ CSS GRID === */
 .lessons-grid {
     display: grid;
-    /* Две колонки: узкая для времени, остальное - контент */
-    grid-template-columns: 60px 1fr;
+    grid-template-columns: 50px 1fr;
+    /* Чуть уже колонка времени для мобилок */
 }
 
 .grid-row {
-    /* Говорим, что ряд занимает все 2 колонки */
     grid-column: 1 / -1;
     display: contents;
-    /* "Растворяет" этот div, делая его детей прямыми элементами грида */
 }
 
-/* Стилизуем ячейки грида */
 .time-cell,
 .content-cell {
-    padding: 10px 10px;
+    padding: 10px;
     display: flex;
     align-items: center;
-    /* Выравнивание по центру по вертикали */
     border-bottom: 1px solid var(--row-border);
-    min-height: 70px;
-    /* Минимальная высота для мобилок */
+    min-height: 80px;
 }
 
-/* Убираем рамку у последних ячеек */
 .lessons-grid>.grid-row:last-of-type>.time-cell,
 .lessons-grid>.grid-row:last-of-type>.content-cell {
     border-bottom: none;
@@ -184,42 +178,24 @@ const getDayName = (dateStr: string) => {
 
 .time-cell {
     justify-content: center;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 600;
     color: var(--text-tertiary);
     border-right: 1px solid var(--row-border);
-    /* Сплошная линия */
 }
 
 .content-cell {
-    padding-left: 15px;
-}
-
-.empty-text {
-    color: var(--text-tertiary);
-    font-style: italic;
+    padding-left: 10px;
 }
 
 .split-content {
     display: flex;
     width: 100%;
-    gap: 10px;
+    gap: 8px;
 }
 
 .split-content>.lesson-card {
     flex: 1;
     min-width: 0;
-}
-
-@media (min-width: 768px) {
-    .lessons-grid {
-        grid-template-columns: 70px 1fr;
-    }
-
-    .time-cell,
-    .content-cell {
-        min-height: 105px;
-        /* Больше места на ПК */
-    }
 }
 </style>

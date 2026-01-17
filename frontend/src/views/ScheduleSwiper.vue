@@ -9,7 +9,7 @@
             <swiper-slide v-for="day in slides" :key="day.date">
                 <!-- === ВАЖНО: Слушаем lessonClick и передаем дальше === -->
                 <DayCard :schedule="day.schedule" :date="day.date"
-                    @lessonClick="(lesson) => $emit('lessonClick', lesson)" />
+                    @lessonClick="(payload) => $emit('lessonClick', payload)" />
             </swiper-slide>
         </swiper-container>
     </div>

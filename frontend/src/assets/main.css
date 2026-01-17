@@ -11,10 +11,13 @@
   --text-tertiary: #a0a0a5;
   --accent-color: #007aff; /* Синий, как в iOS */
   --accent-color-light: #e6f2ff;
+  --accent-color-light: #e6f2ff;
+  --footer-bg: rgba(255, 255, 255, 0.1);
+  --footer-border: rgba(255, 255, 255, 0.1);
 }
 
 /* === ТЕМНАЯ ТЕМА (подхватывается автоматически) === */
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) {
   :root {
     --bg-color: #1c1c1e;
     --card-bg: rgba(44, 44, 46, 0.65);
@@ -25,8 +28,12 @@
     --text-tertiary: #636366;
     --accent-color: #0a84ff;
     --accent-color-light: rgba(10, 132, 255, 0.2);
+  --accent-color: #0a84ff;
+  --accent-color-light: rgba(10, 132, 255, 0.2);
+  --footer-bg: rgba(44, 44, 46, 0.1);
+  --footer-border: rgba(255, 255, 255, 0.15);
   }
-}
+} */
 
 body {
   background: var(--bg-color);
@@ -44,4 +51,3 @@ body {
   flex-direction: column;
 }
 
-/* ... остальные глобальные стили (анимации и т.д.) ... */

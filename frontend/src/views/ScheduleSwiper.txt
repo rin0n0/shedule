@@ -7,7 +7,9 @@
         <swiper-container :class="{ 'hidden-swiper': loading }" :init="false" ref="swiperRef" direction="vertical"
             class="my-swiper">
             <swiper-slide v-for="day in slides" :key="day.date">
-                <DayCard :schedule="day.schedule" :date="day.date" />
+                <!-- === ВАЖНО: Слушаем lessonClick и передаем дальше === -->
+                <DayCard :schedule="day.schedule" :date="day.date"
+                    @lessonClick="(payload) => $emit('lessonClick', payload)" />
             </swiper-slide>
         </swiper-container>
     </div>
@@ -17,9 +19,12 @@
 import { ref, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useMainStore } from '@/stores/main_store'
-import type { DaySchedule } from '@/types'
+import type { DaySchedule, Lesson } from '@/types' // Импортируем Lesson
 import DayCard from './DayCard.vue'
 import type { SwiperContainer } from 'swiper/element'
+
+// === ВАЖНО: Объявляем emit ===
+defineEmits(['lessonClick']);
 
 interface Slide {
     date: string;
@@ -41,32 +46,17 @@ const formatDate = (date: Date) => {
     return `${y}-${m}-${d}`;
 };
 
-
 const getAcademicToday = (): Date => {
     const now = new Date();
-
-    // локальный час
     const hours = now.getHours();
-
-    // если после 18:00 — считаем следующий день
-    if (hours >= 18) {
-        now.setDate(now.getDate() + 1);
-    }
-
-    // если попали на воскресенье — сдвигаем на понедельник
-    if (now.getDay() === 0) {
-        now.setDate(now.getDate() + 1);
-    }
-
+    if (hours >= 18) now.setDate(now.getDate() + 1);
+    if (now.getDay() === 0) now.setDate(now.getDate() + 1);
     return now;
 };
 
-// === НОВАЯ ФУНКЦИЯ: ПРОПУСК ВОСКРЕСЕНЬЯ ===
 const addAcademicDays = (date: Date, days: number): Date => {
     const result = new Date(date);
     result.setDate(result.getDate() + days);
-
-    // Если попали на Воскресенье (0), двигаемся еще на 1 день в ТУ ЖЕ сторону
     if (result.getDay() === 0) {
         const direction = days > 0 ? 1 : -1;
         result.setDate(result.getDate() + direction);
@@ -76,33 +66,27 @@ const addAcademicDays = (date: Date, days: number): Date => {
 
 const initData = async (dateStr: string) => {
     loading.value = true;
-
-    // Если запросили Воскресенье (например, через URL), сдвигаем на Понедельник
     let centerDate = new Date(dateStr);
     if (centerDate.getDay() === 0) {
         centerDate.setDate(centerDate.getDate() + 1);
     }
 
-    // 1. Генерируем слайды: [Вчера*, Сегодня, Завтра*] (* - с учетом пропуска ВС)
     const prevDate = addAcademicDays(centerDate, -1);
     const nextDate = addAcademicDays(centerDate, 1);
 
-    // Массив дат в правильном порядке
     const datesToLoad = [
         formatDate(prevDate),
         formatDate(centerDate),
         formatDate(nextDate)
     ];
 
-    const promises = datesToLoad.map(async (d) => {
-        await mainStore.ensureDayLoaded(d);
-        return {
-            date: d,
-            schedule: mainStore.getDaySchedule(d) || null
-        };
-    });
+    // Используем ensureDayLoaded, который мы починили в прошлом шаге
+    await Promise.all(datesToLoad.map(d => mainStore.ensureDayLoaded(d)));
 
-    slides.value = await Promise.all(promises);
+    slides.value = datesToLoad.map(d => ({
+        date: d,
+        schedule: mainStore.getDaySchedule(d) || null
+    }));
 
     await nextTick();
     initSwiper();
@@ -119,7 +103,7 @@ const initSwiper = () => {
     }
 
     const params = {
-        initialSlide: 1, // Центр
+        initialSlide: 1,
         mousewheel: { forceToAxis: true, sensitivity: 1 },
         speed: 400,
         virtual: false,
@@ -144,11 +128,8 @@ const onSlideChange = async (e: Event) => {
         setTimeout(() => { isInternalNav.value = false }, 50);
     }
 
-    // === БЕСКОНЕЧНАЯ ПРОКРУТКА С ПРОПУСКОМ ВС ===
     if (activeIndex >= slides.value.length - 1) {
-        // Идем в будущее
         const lastSlideDate = new Date(slides.value[slides.value.length - 1]!.date);
-        // Используем нашу функцию для пропуска
         const nextDate = addAcademicDays(lastSlideDate, 1);
         const nextDateStr = formatDate(nextDate);
 
@@ -163,9 +144,7 @@ const onSlideChange = async (e: Event) => {
         swiper.update();
     }
     else if (activeIndex <= 0) {
-        // Идем в прошлое
         const firstSlideDate = new Date(slides.value[0]!.date);
-        // Используем нашу функцию для пропуска
         const prevDate = addAcademicDays(firstSlideDate, -1);
         const prevDateStr = formatDate(prevDate);
 
@@ -186,8 +165,8 @@ watch(
     () => route.params.date,
     async (newDate) => {
         if (isInternalNav.value) return;
-
         const targetDate = Array.isArray(newDate) ? newDate[0] : newDate;
+
         if (targetDate && typeof targetDate === 'string') {
             const inSlides = slides.value.some(s => s.date === targetDate);
             if (!inSlides) {
@@ -204,10 +183,6 @@ watch(
 
 onMounted(() => {
     let start = formatDate(getAcademicToday());
-    if (new Date().getDay() === 0) {
-        start = formatDate(addAcademicDays(new Date(), 1));
-    }
-
     const rDate = route.params.date;
     if (rDate && typeof rDate === 'string' && !isNaN(Date.parse(rDate))) {
         start = rDate;
@@ -227,7 +202,6 @@ onMounted(() => {
 .my-swiper {
     width: 100%;
     height: 100%;
-    transition: opacity 0.3s ease;
 }
 
 .hidden-swiper {

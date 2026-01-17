@@ -23,13 +23,12 @@
                                 <div v-if="slot.isEmpty" class="empty-text"></div>
 
                                 <!-- ОДНА ПАРА -->
-                                <LessonCard v-else-if="slot.lessons.length === 1" :lesson="slot.lessons[0]!"
-                                    @click="$emit('lessonClick', slot.lessons[0]!)" />
-
-                                <!-- ДВЕ ПАРЫ (ПОДГРУППЫ) -->
+                                <LessonCard v-if="slot.lessons.length === 1" :lesson="slot.lessons[0]!"
+                                    :date="props.date" @lessonClick="(payload) => $emit('lessonClick', payload)" />
                                 <div v-else class="split-content">
-                                    <LessonCard v-for="(lesson, i) in slot.lessons" :key="i" :lesson="lesson" is-compact
-                                        @click="$emit('lessonClick', lesson)" />
+                                    <LessonCard v-for="(lesson, i) in slot.lessons" :key="i" :lesson="lesson"
+                                        :date="props.date" is-compact
+                                        @lessonClick="(payload) => $emit('lessonClick', payload)" />
                                 </div>
                             </div>
                         </div>

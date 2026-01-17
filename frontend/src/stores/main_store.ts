@@ -9,7 +9,7 @@ export const useMainStore = defineStore("main", {
     userGroup: null as string | null,
     userTeacher: null as string | null,
     userSubgroup: 0,
-
+    notes: {} as Record<string, string>,
     // КЭШ
     scheduleCache: {} as ScheduleCache,
     activeDays: new Set<string>(),
@@ -24,12 +24,12 @@ export const useMainStore = defineStore("main", {
     getDaySchedule: (state) => (date: string) => state.scheduleCache[date],
     currentModeTitle: (state) =>
       state.userTeacher ? state.userTeacher : state.userGroup,
-
+    isRegistredSubgroup: (state): boolean => state.userSubgroup == 0,
     // Геттер для заголовка, берет данные из viewedDate
     currentWeekInfo: (state) => {
       const schedule = state.scheduleCache[state.viewedDate];
       if (schedule?.week_type) {
-        return `${schedule.week_number}-я нед. (${schedule.week_type})`;
+        return `(${schedule.week_type})`;
       }
       // Если данных нет, пробуем хотя бы посчитать неделю (тут можно fallback логику, но пока пустая строка)
       return "";
@@ -42,6 +42,40 @@ export const useMainStore = defineStore("main", {
       this.userTeacher = localStorage.getItem("userTeacher");
       const sub = localStorage.getItem("userSubgroup");
       this.userSubgroup = sub ? parseInt(sub) : 0;
+      const storedNotes = localStorage.getItem("schedule_notes");
+      if (storedNotes) {
+        this.notes = JSON.parse(storedNotes);
+      }
+    },
+    async fetchActiveDaysRange(centerDate: Date) {
+      if (!this.isRegistered) return;
+      try {
+        const startDate = new Date(centerDate);
+        startDate.setDate(centerDate.getDate() - 180);
+
+        const endDate = new Date(centerDate);
+        // === ИСПРАВЛЕНО: БЫЛО -31, СТАЛО +31 ===
+        endDate.setDate(centerDate.getDate() + 180);
+
+        const params = new URLSearchParams();
+        params.append("start_date", startDate.toISOString().substring(0, 10));
+        params.append("end_date", endDate.toISOString().substring(0, 10));
+
+        if (this.userGroup) params.append("group", this.userGroup);
+        if (this.userTeacher) params.append("teacher", this.userTeacher);
+
+        const data = await apiClient.get<any>(
+          `/meta/active_days_range?${params.toString()}`
+        );
+
+        if (data && data.active_days) {
+          // Очищаем старые и добавляем новые.
+          this.activeDays.clear();
+          data.active_days.forEach((day: string) => this.activeDays.add(day));
+        }
+      } catch (e) {
+        console.error("Failed to fetch active days range:", e);
+      }
     },
 
     setGroup(group: string) {
@@ -50,6 +84,14 @@ export const useMainStore = defineStore("main", {
       localStorage.setItem("userGroup", group);
       localStorage.removeItem("userTeacher");
       this.clearCache();
+    },
+    saveNote(noteKey: string, text: string) {
+      if (!text.trim()) {
+        delete this.notes[noteKey];
+      } else {
+        this.notes[noteKey] = text;
+      }
+      localStorage.setItem("schedule_notes", JSON.stringify(this.notes));
     },
 
     setTeacher(teacher: string) {

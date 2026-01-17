@@ -1,3 +1,4 @@
+
 import asyncio
 import hashlib
 from datetime import datetime, date
@@ -7,7 +8,7 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, Set, Optional
 
-# --- КОНФИГУРАЦИЯ ---
+
 origins = [
     "http://localhost",
     "http://localhost:8080",
@@ -21,7 +22,7 @@ file_hashes: Dict[str, str] = {}
 all_groups: Set[str] = set()
 all_teachers: Set[str] = set()
 
-app = FastAPI(title="Polytech Schedule API", version="1.3.0")
+app = FastAPI(title="Polytech Schedule API", version="1.4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -56,11 +57,9 @@ def calculate_week_info(target_date: date = None):
     diff = calc_date - academic_year_start
     diff_days = diff.days
     
-    # 1. Расчет номера недели (Legacy 1-20)
-    week_number = (diff_days // 14) + 1
+    week_number = (diff_days // 7) + 1
     week_number = max(1, min(20, week_number))
     
-    # 2. Расчет Числитель/Знаменатель (реальный календарный)
     real_week_num = (diff_days // 7) + 1
     week_type = "Числитель" if real_week_num % 2 != 0 else "Знаменатель"
     
@@ -81,7 +80,6 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
     soup = BeautifulSoup(xml_content, 'lxml-xml')
     all_records = soup.find_all('My')
     
-    # Временные хранилища для группировки
     raw_buckets_group = {}
     raw_buckets_teacher = {}
 
@@ -97,18 +95,17 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
         group_tags = record.find_all('SPGRUP.NAIM')
         groups_in_record = [t.text.strip() for t in group_tags if t.text.strip()]
         
-        is_stream = len(groups_in_record) > 1
+        is_stream_xml = len(groups_in_record) > 1
         
         subgroup = safe_int(get_tag_text(record, 'IDGG'))
         subject_name = get_tag_text(record, 'SPPRED.NAIM')
         teacher_name = get_tag_text(record, 'FAMIO')
         zam_val = get_tag_text(record, 'ZAM', '0')
         
-        # --- ОПРЕДЕЛЕНИЕ СТАТУСА ---
         status = 'ok'
         subj_upper = subject_name.upper().strip()
         
-        if "ОТМЕНА" in subj_upper or "САМОПОДГОТОВКА" in subj_upper:
+        if "ОТМЕНА" in subj_upper:
             status = 'cancellation'
         elif zam_val != '0':
             status = 'replacement'
@@ -118,40 +115,31 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
             'subject': subject_name,
             'teacher': teacher_name,
             'subgroup': subgroup,
-            'is_stream': is_stream,
+            'is_stream': is_stream_xml,
             'status': status,
             'group_list': groups_in_record,
-            'original_subject': None # Заполним при слиянии, если найдем пару
+            'original_subject': None
         }
-
-        # Наполняем бакеты для групп
         for group_name in groups_in_record:
             all_groups.add(group_name)
             if group_name not in raw_buckets_group: raw_buckets_group[group_name] = {}
             if formatted_date not in raw_buckets_group[group_name]: raw_buckets_group[group_name][formatted_date] = {}
-            
             key = (lesson_data['lesson_number'], subgroup)
-            if key not in raw_buckets_group[group_name][formatted_date]:
-                raw_buckets_group[group_name][formatted_date][key] = []
-            
+            if key not in raw_buckets_group[group_name][formatted_date]: raw_buckets_group[group_name][formatted_date][key] = []
             raw_buckets_group[group_name][formatted_date][key].append(lesson_data)
 
-        # Наполняем бакеты для преподавателей
         if teacher_name:
             all_teachers.add(teacher_name)
             if teacher_name not in raw_buckets_teacher: raw_buckets_teacher[teacher_name] = {}
             if formatted_date not in raw_buckets_teacher[teacher_name]: raw_buckets_teacher[teacher_name][formatted_date] = {}
-            
             key = (lesson_data['lesson_number'], subgroup)
-            if key not in raw_buckets_teacher[teacher_name][formatted_date]:
-                raw_buckets_teacher[teacher_name][formatted_date][key] = []
+            if key not in raw_buckets_teacher[teacher_name][formatted_date]: raw_buckets_teacher[teacher_name][formatted_date][key] = []
             
             t_lesson = lesson_data.copy()
-            t_lesson['group'] = ", ".join(groups_in_record) if len(groups_in_record) < 3 else "Поток"
+            t_lesson['group'] = groups_in_record[0] if groups_in_record else ""
             raw_buckets_teacher[teacher_name][formatted_date][key].append(t_lesson)
 
-    # --- ФУНКЦИЯ СЛИЯНИЯ ---
-    def resolve_conflicts(buckets):
+    def resolve_conflicts(buckets, is_teacher_mode=False):
         final_data = {}
         day_names_ru = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
 
@@ -162,37 +150,44 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
                 final_lessons = []
                 
                 for (lesson_num, sub), candidates in slots.items():
-                    # 1. Если кандидат один - берем его как есть
-                    if len(candidates) == 1:
-                        final_lessons.append(candidates[0])
-                        continue
+                    all_participating_groups = set()
+                    for cand in candidates:
+                        for g in cand.get('group_list', []):
+                            all_participating_groups.add(g)
                     
-                    # 2. Если кандидатов несколько (конфликт/накладка)
-                    # Приоритет: Отмена > Замена > Ок
-                    
+                    is_calculated_stream = len(all_participating_groups) > 1
+
                     cancellation = next((x for x in candidates if x['status'] == 'cancellation'), None)
                     replacement = next((x for x in candidates if x['status'] == 'replacement'), None)
                     original = next((x for x in candidates if x['status'] == 'ok'), None)
                     
                     winner = None
-                    
                     if cancellation:
                         winner = cancellation.copy()
-                        # Если есть оригинал, сохраняем его имя для истории
                         if original:
                             winner['original_subject'] = original['subject']
-                            # Для отмены часто нет преподавателя, берем из оригинала
-                            if not winner['teacher']:
-                                winner['teacher'] = original['teacher']
+                            if not winner['teacher']: winner['teacher'] = original['teacher']
                     elif replacement:
                         winner = replacement.copy()
                         if original:
                             winner['original_subject'] = original['subject']
                     elif original:
-                        winner = original
+                        winner = original.copy()
                     else:
-                        winner = candidates[-1] # Fallback
-                        
+                        winner = candidates[-1].copy()
+
+                    winner['is_stream'] = is_calculated_stream
+                    if is_calculated_stream:
+                        sorted_groups = sorted(list(all_participating_groups))
+                        if is_teacher_mode:
+                            if len(sorted_groups) > 3:
+                                winner['group'] = f"Поток ({len(sorted_groups)} гр.)"
+                            else:
+                                winner['group'] = ", ".join(sorted_groups)
+                    if "ОТМЕНА" in winner['subject'].upper():
+                        winner['status'] = 'cancellation'
+                        winner['subject'] = "ОТМЕНА"
+
                     final_lessons.append(winner)
 
                 final_lessons.sort(key=lambda x: x['lesson_number'])
@@ -203,14 +198,13 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
         return final_data
 
     return {
-        "groups": resolve_conflicts(raw_buckets_group),
-        "teachers": resolve_conflicts(raw_buckets_teacher)
+        "groups": resolve_conflicts(raw_buckets_group, is_teacher_mode=False),
+        "teachers": resolve_conflicts(raw_buckets_teacher, is_teacher_mode=True)
     }
 
 async def update_cache_task():
     while True:
         print("CRON: Checking updates...")
-        # Скачиваем с 1 по 20 неделю
         for week_num in range(1, 21): 
             url = f"http://polytech-shedule.ru/{week_num}.xml"
             try:
@@ -218,7 +212,6 @@ async def update_cache_task():
                 if response.status_code == 200:
                     content = response.content
                     new_hash = hashlib.md5(content).hexdigest()
-                    
                     if file_hashes.get(str(week_num)) != new_hash:
                         print(f"CRON: Week {week_num} updated.")
                         schedule_cache[str(week_num)] = parse_xml_to_json(content.decode('utf-8'))
@@ -259,8 +252,6 @@ async def get_schedule_for_day(
     
     found_schedule = None
     
-    # Ищем данные в кэше
-    # ВАЖНО: Добавлена защита от None
     for week_key, week_data in schedule_cache.items():
         if not week_data: continue
             
@@ -281,6 +272,32 @@ async def get_schedule_for_day(
         "week_number": week_idx,
         "week_type": week_type
     }
+
+@app.get("/api/meta/active_days_range")
+async def get_active_days_for_range(
+    start_date: date,
+    end_date: date,
+    group: Optional[str] = None,
+    teacher: Optional[str] = None
+):
+    """Отдает активные дни в заданном диапазоне дат."""
+    active_days = set()
+    for week_data in schedule_cache.values():
+        if not week_data: continue
+        
+        target_dict = week_data["groups"] if group else week_data["teachers"]
+        key = group if group else teacher
+        
+        if key in target_dict:
+            for date_str in target_dict[key].keys():
+                try:
+                    date_obj = date.fromisoformat(date_str)
+                    if start_date <= date_obj <= end_date:
+                        active_days.add(date_str)
+                except ValueError:
+                    continue
+                    
+    return {"active_days": sorted(list(active_days))}
 
 @app.get("/api/meta/active_days")
 async def get_active_days(
