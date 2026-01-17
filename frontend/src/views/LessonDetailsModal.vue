@@ -1,4 +1,3 @@
-<!-- src/views/LessonDetailsModal.vue -->
 <template>
     <div class="modal-overlay" @click.self="$emit('close')">
         <div class="modal-card">
@@ -8,11 +7,12 @@
             </div>
 
             <div class="info-content">
+                <!-- Заголовок -->
                 <h3 class="subject">{{ lesson.subject }}</h3>
 
                 <div class="row">
                     <span class="icon">👨‍🏫</span>
-                    <span class="value">{{ lesson.teacher || 'Нет данных' }}</span>
+                    <span class="value">{{ lesson.teacher || 'Преподаватель не указан' }}</span>
                 </div>
 
                 <div class="row" v-if="lesson.group">
@@ -25,7 +25,10 @@
                     <span class="status-icon">🔥</span>
                     <div class="status-text">
                         <strong>Замена</strong>
-                        <p>В расписании произошли изменения.</p>
+                        <p v-if="lesson.original_subject">
+                            Вместо предмета: <span class="orig-subject">«{{ lesson.original_subject }}»</span>
+                        </p>
+                        <p v-else>В расписании произошли изменения.</p>
                     </div>
                 </div>
 
@@ -34,14 +37,17 @@
                     <span class="status-icon">❌</span>
                     <div class="status-text">
                         <strong>Пара отменена</strong>
-                        <p>Занятия не будет.</p>
+                        <!-- Если у нас есть инфа об оригинале, выводим её -->
+                        <p v-if="lesson.original_subject">
+                            Отменен предмет: <span class="orig-subject">«{{ lesson.original_subject }}»</span>
+                        </p>
+                        <p v-else>Занятия не будет.</p>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </template>
-
 <script setup lang="ts">
 import type { Lesson } from '@/types';
 
@@ -53,13 +59,20 @@ defineEmits(['close']);
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.6);
+    background: var(--bg-color);
     backdrop-filter: blur(8px);
     z-index: 200;
     display: flex;
     justify-content: center;
     align-items: center;
     animation: fadeIn 0.2s;
+}
+
+.orig-subject {
+    font-style: italic;
+    opacity: 0.8;
+    display: inline-block;
+    margin-top: 2px;
 }
 
 .modal-card {

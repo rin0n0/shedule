@@ -98,8 +98,9 @@ watch(() => props.centerDate, (newDate) => {
     </div>
 </template>
 
+<!-- ... template и script те же ... -->
+
 <style scoped>
-/* CSS из прошлого ответа, можно оставить */
 .week-view-container {
     height: 100%;
     overflow-y: auto;
@@ -134,8 +135,8 @@ watch(() => props.centerDate, (newDate) => {
 .grid-header {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    gap: 10px;
-    margin-bottom: 10px;
+    gap: 8px;
+    margin-bottom: 8px;
 }
 
 .header-cell {
@@ -162,42 +163,71 @@ watch(() => props.centerDate, (newDate) => {
     opacity: 0.6;
 }
 
+/* ... (верхняя часть без изменений) ... */
+
 .grid-body {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
-    gap: 10px;
+    gap: 8px;
+    /* Расстояние между колонками (днями) */
     flex: 1;
 }
 
 .day-column {
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    /* Убираем gap между парами, чтобы они слипались в одну колонку, 
+       но разделялись линиями. Если хочешь раздельные блоки - ставь gap: 4px */
+    gap: 0;
+
+    /* Общая обводка вокруг дня */
+    border: 1px solid var(--card-border);
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--card-bg);
+    /* Общий фон дня */
 }
 
 .slot-cell {
-    background: var(--card-bg);
-    border: 1px solid var(--card-border);
-    border-radius: 12px;
+    background: transparent;
+    border: none;
+    /* Добавляем линию-разделитель снизу */
+    border-bottom: 1px solid var(--row-border);
     height: 110px;
-    /* Фиксированная высота */
-    padding: 5px;
     position: relative;
-    overflow: hidden;
-    /* Гарантия того, что не вылезет */
+    padding: 0;
+}
+
+/* У последней ячейки убираем линию */
+.slot-cell:last-child {
+    border-bottom: none;
 }
 
 .slot-num {
     position: absolute;
-    top: 5px;
+    top: 6px;
     left: 8px;
     font-size: 10px;
     opacity: 0.2;
     font-weight: bold;
+    z-index: 10;
 }
 
 .lesson-content {
+    width: 100%;
     height: 100%;
-    padding-left: 15px;
+}
+
+:deep(.lesson-card) {
+    border-radius: 0 !important;
+    /* Внутри колонки без скруглений */
+    border: none !important;
+    height: 100%;
+    /* Если это замена/отмена, фон будет переопределен в LessonCard */
+}
+
+/* При наведении подсвечиваем ячейку */
+.slot-cell:hover {
+    background-color: rgba(255, 255, 255, 0.02);
 }
 </style>

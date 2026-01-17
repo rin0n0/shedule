@@ -4,13 +4,15 @@ export interface Lesson {
   lesson_number: number;
   subject: string;
   teacher: string;
-  group?: string; // Для режима учителя
+  group?: string;
   subgroup: number;
 
-  // Новые поля
   is_stream: boolean;
   status: LessonStatus;
-  group_list?: string[]; // Список групп (если поток)
+  group_list?: string[];
+
+  // НОВОЕ ПОЛЕ
+  original_subject?: string | null;
 }
 
 export interface DaySchedule {
