@@ -1,25 +1,52 @@
 <template>
     <div class="schedule-view">
-        <ResponsiveControls @openCalendar="showCalendar = true" @openSettings="showSettings = true" />
+        <!-- ПОКАЗЫВАЕМ ТОЛЬКО НА МОБИЛКЕ -->
+        <ResponsiveControls 
+            v-if="isMobile"
+            @openCalendar="showCalendar = true" 
+            @openSettings="showSettings = true"
+        />
 
         <div class="content-area">
-            <WeekScheduleView v-if="!isMobile" :center-date="currentDate" @lessonClick="openLessonDetails" />
-
-            <ScheduleSwiper v-else @lessonClick="openLessonDetails" />
+             <!-- Desktop: Grid (добавляем прослушку событий) -->
+             <WeekScheduleView 
+               v-if="!isMobile" 
+               :center-date="currentDate"
+               @lessonClick="openLessonDetails"
+               @openCalendar="showCalendar = true"
+               @openSettings="showSettings = true"
+             />
+             
+             <!-- Mobile: Swiper -->
+             <ScheduleSwiper 
+               v-else 
+               @lessonClick="openLessonDetails"
+             />
         </div>
 
+        <!-- ... модалки (CalendarModal, SettingsModal, LessonDetailsModal) без изменений ... -->
         <Transition name="fade">
-            <CalendarModal v-if="showCalendar" :show="showCalendar" @close="showCalendar = false" />
+            <CalendarModal 
+                v-if="showCalendar" 
+                :show="showCalendar" 
+                @close="showCalendar = false" 
+            />
         </Transition>
 
         <Transition name="fade">
-            <SettingsModal v-if="showSettings" @close="showSettings = false" />
+            <SettingsModal 
+                v-if="showSettings" 
+                @close="showSettings = false" 
+            />
         </Transition>
-
+        
         <Transition name="fade">
-            <!-- === ИСПРАВЛЕНО: Убран лишний символ '<' === -->
-            <LessonDetailsModal v-if="selectedLesson && selectedLessonDate" :lesson="selectedLesson"
-                :date="selectedLessonDate" @close="closeLessonDetails" />
+            <LessonDetailsModal 
+                v-if="selectedLesson && selectedLessonDate"
+                :lesson="selectedLesson" 
+                :date="selectedLessonDate" 
+                @close="closeLessonDetails" 
+            />
         </Transition>
     </div>
 </template>

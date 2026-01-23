@@ -24,7 +24,7 @@
                     {{ lesson.subgroup }}
                 </span>
                 <div class="hover-arrow">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <svg width="36" height="36" viewBox="0 0 36 36" fill="none" stroke="currentColor" stroke-width="3">
                         <path d="M9 18l6-6-6-6" />
                     </svg>
                 </div>
@@ -63,8 +63,8 @@ const handleClick = () => {
     justify-content: space-between;
     /* Прижимает header и footer к краям */
     padding: 12px;
+    width: 100%;
     height: 100%;
-
     position: relative;
     cursor: pointer;
     transition: background 0.2s;
@@ -178,5 +178,11 @@ const handleClick = () => {
     opacity: 0.8;
     transform: translateX(2px);
     color: var(--accent-color);
+}
+
+@media (min-width:788px) {
+    .lesson-card {
+        min-height: 105px;
+    }
 }
 </style>

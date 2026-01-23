@@ -1,4 +1,3 @@
-
 import asyncio
 import hashlib
 from datetime import datetime, date
@@ -8,7 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 from typing import Dict, Any, Set, Optional
 
-
+# --- КОНФИГУРАЦИЯ ---
 origins = [
     "http://localhost",
     "http://localhost:8080",
@@ -22,7 +21,7 @@ file_hashes: Dict[str, str] = {}
 all_groups: Set[str] = set()
 all_teachers: Set[str] = set()
 
-app = FastAPI(title="Polytech Schedule API", version="1.4.0")
+app = FastAPI(title="Polytech Schedule API", version="1.6.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -57,7 +56,7 @@ def calculate_week_info(target_date: date = None):
     diff = calc_date - academic_year_start
     diff_days = diff.days
     
-    week_number = (diff_days // 7) + 1
+    week_number = (diff_days // 14) + 1
     week_number = max(1, min(20, week_number))
     
     real_week_num = (diff_days // 7) + 1
@@ -103,23 +102,21 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
         zam_val = get_tag_text(record, 'ZAM', '0')
         
         status = 'ok'
-        subj_upper = subject_name.upper().strip()
         
-        if "ОТМЕНА" in subj_upper:
-            status = 'cancellation'
-        elif zam_val != '0':
-            status = 'replacement'
-            
         lesson_data = {
             'lesson_number': safe_int(get_tag_text(record, 'UR')),
             'subject': subject_name,
             'teacher': teacher_name,
             'subgroup': subgroup,
             'is_stream': is_stream_xml,
-            'status': status,
+            'status': status, 
+            'zam': zam_val,
             'group_list': groups_in_record,
-            'original_subject': None
+            'original_subject': None, # Для имени старого предмета
+            'original_teacher': None  # Для имени старого учителя
         }
+
+        # Бакеты ГРУПП
         for group_name in groups_in_record:
             all_groups.add(group_name)
             if group_name not in raw_buckets_group: raw_buckets_group[group_name] = {}
@@ -128,6 +125,7 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
             if key not in raw_buckets_group[group_name][formatted_date]: raw_buckets_group[group_name][formatted_date][key] = []
             raw_buckets_group[group_name][formatted_date][key].append(lesson_data)
 
+        # Бакеты ПРЕПОДАВАТЕЛЕЙ
         if teacher_name:
             all_teachers.add(teacher_name)
             if teacher_name not in raw_buckets_teacher: raw_buckets_teacher[teacher_name] = {}
@@ -139,6 +137,7 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
             t_lesson['group'] = groups_in_record[0] if groups_in_record else ""
             raw_buckets_teacher[teacher_name][formatted_date][key].append(t_lesson)
 
+    # --- ФУНКЦИЯ СЛИЯНИЯ ---
     def resolve_conflicts(buckets, is_teacher_mode=False):
         final_data = {}
         day_names_ru = ["Понедельник", "Вторник", "Среда", "Четверг", "Пятница", "Суббота", "Воскресенье"]
@@ -150,43 +149,53 @@ def parse_xml_to_json(xml_content: str) -> Dict[str, Any]:
                 final_lessons = []
                 
                 for (lesson_num, sub), candidates in slots.items():
+                    # 1. Поток
                     all_participating_groups = set()
                     for cand in candidates:
                         for g in cand.get('group_list', []):
                             all_participating_groups.add(g)
-                    
                     is_calculated_stream = len(all_participating_groups) > 1
 
-                    cancellation = next((x for x in candidates if x['status'] == 'cancellation'), None)
-                    replacement = next((x for x in candidates if x['status'] == 'replacement'), None)
-                    original = next((x for x in candidates if x['status'] == 'ok'), None)
+                    # 2. Поиск пар по ZAM
+                    new_lesson = next((x for x in candidates if x['zam'] == '1'), None)
+                    old_lesson = next((x for x in candidates if x['zam'] == '2'), None)
+                    standard_lesson = next((x for x in candidates if x['zam'] == '0'), None)
                     
                     winner = None
-                    if cancellation:
-                        winner = cancellation.copy()
-                        if original:
-                            winner['original_subject'] = original['subject']
-                            if not winner['teacher']: winner['teacher'] = original['teacher']
-                    elif replacement:
-                        winner = replacement.copy()
-                        if original:
-                            winner['original_subject'] = original['subject']
-                    elif original:
-                        winner = original.copy()
+                    
+                    if new_lesson:
+                        winner = new_lesson.copy()
+                        
+                        subj_upper = winner['subject'].upper()
+                        if "ОТМЕНА" in subj_upper or "САМОПОДГОТОВКА" in subj_upper:
+                            winner['status'] = 'cancellation'
+                            winner['subject'] = "ОТМЕНА"
+                        else:
+                            winner['status'] = 'replacement'
+                        
+                        # Сохраняем данные СТАРОЙ пары
+                        if old_lesson:
+                            winner['original_subject'] = old_lesson['subject']
+                            winner['original_teacher'] = old_lesson['teacher'] # Сохраняем старого препода
+                            
+                            if winner['status'] == 'cancellation' and not winner['teacher']:
+                                winner['teacher'] = old_lesson['teacher']
+                                
+                    elif standard_lesson:
+                        winner = standard_lesson.copy()
+                        winner['status'] = 'ok'
+                    elif old_lesson:
+                        continue
                     else:
                         winner = candidates[-1].copy()
 
                     winner['is_stream'] = is_calculated_stream
-                    if is_calculated_stream:
+                    if is_calculated_stream and is_teacher_mode:
                         sorted_groups = sorted(list(all_participating_groups))
-                        if is_teacher_mode:
-                            if len(sorted_groups) > 3:
-                                winner['group'] = f"Поток ({len(sorted_groups)} гр.)"
-                            else:
-                                winner['group'] = ", ".join(sorted_groups)
-                    if "ОТМЕНА" in winner['subject'].upper():
-                        winner['status'] = 'cancellation'
-                        winner['subject'] = "ОТМЕНА"
+                        if len(sorted_groups) > 3:
+                            winner['group'] = f"Поток ({len(sorted_groups)} гр.)"
+                        else:
+                            winner['group'] = ", ".join(sorted_groups)
 
                     final_lessons.append(winner)
 
@@ -254,10 +263,8 @@ async def get_schedule_for_day(
     
     for week_key, week_data in schedule_cache.items():
         if not week_data: continue
-            
         target_dict = week_data["groups"] if group else week_data["teachers"]
         key = group if group else teacher
-        
         if key in target_dict and date_str in target_dict[key]:
             found_schedule = target_dict[key][date_str]
             break
@@ -273,32 +280,6 @@ async def get_schedule_for_day(
         "week_type": week_type
     }
 
-@app.get("/api/meta/active_days_range")
-async def get_active_days_for_range(
-    start_date: date,
-    end_date: date,
-    group: Optional[str] = None,
-    teacher: Optional[str] = None
-):
-    """Отдает активные дни в заданном диапазоне дат."""
-    active_days = set()
-    for week_data in schedule_cache.values():
-        if not week_data: continue
-        
-        target_dict = week_data["groups"] if group else week_data["teachers"]
-        key = group if group else teacher
-        
-        if key in target_dict:
-            for date_str in target_dict[key].keys():
-                try:
-                    date_obj = date.fromisoformat(date_str)
-                    if start_date <= date_obj <= end_date:
-                        active_days.add(date_str)
-                except ValueError:
-                    continue
-                    
-    return {"active_days": sorted(list(active_days))}
-
 @app.get("/api/meta/active_days")
 async def get_active_days(
     month: str = Query(..., regex=r"^\d{4}-\d{2}$"),
@@ -310,11 +291,32 @@ async def get_active_days(
         if not week_data: continue
         target_dict = week_data["groups"] if group else week_data["teachers"]
         key = group if group else teacher
-        
         if key in target_dict:
             for date_str in target_dict[key].keys():
                 if date_str.startswith(month):
                     active_days.add(date_str)
+    return {"active_days": sorted(list(active_days))}
+
+@app.get("/api/meta/active_days_range")
+async def get_active_days_for_range(
+    start_date: date,
+    end_date: date,
+    group: Optional[str] = None,
+    teacher: Optional[str] = None
+):
+    active_days = set()
+    for week_data in schedule_cache.values():
+        if not week_data: continue
+        target_dict = week_data["groups"] if group else week_data["teachers"]
+        key = group if group else teacher
+        if key in target_dict:
+            for date_str in target_dict[key].keys():
+                try:
+                    date_obj = date.fromisoformat(date_str)
+                    if start_date <= date_obj <= end_date:
+                        active_days.add(date_str)
+                except ValueError:
+                    continue
     return {"active_days": sorted(list(active_days))}
 
 if __name__ == "__main__":

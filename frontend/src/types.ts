@@ -1,4 +1,4 @@
-export type LessonStatus = "ok" | "replacement" | "cancellation";
+export type LessonStatus = 'ok' | 'replacement' | 'cancellation';
 
 export interface Lesson {
   lesson_number: number;
@@ -6,13 +6,14 @@ export interface Lesson {
   teacher: string;
   group?: string;
   subgroup: number;
-
+  
   is_stream: boolean;
-  status: LessonStatus;
+  status: LessonStatus; 
   group_list?: string[];
-
-  // НОВОЕ ПОЛЕ
-  original_subject?: string | null;
+  
+  // Доп поля для истории изменений
+  original_subject?: string | null; 
+  original_teacher?: string | null; // НОВОЕ ПОЛЕ
 }
 
 export interface DaySchedule {

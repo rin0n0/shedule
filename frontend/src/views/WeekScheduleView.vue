@@ -8,7 +8,7 @@ import LessonCard from '@/views/LessonCard.vue';
 import type { Lesson } from '@/types';
 
 const props = defineProps<{ centerDate: string }>();
-const emit = defineEmits(['lessonClick']);
+const emit = defineEmits(['lessonClick', 'openCalendar', 'openSettings']);
 const mainStore = useMainStore();
 const router = useRouter();
 
@@ -76,21 +76,21 @@ watch(() => props.centerDate, (newDate) => {
 
 <!-- Template оставляем тот же, что в прошлом ответе, он был ок -->
 <template>
-    <div class="week-view-container">
-        <!-- ... навигация без изменений ... -->
-        <div class="week-nav-sticky">
+    <div class="week-nav-sticky">
+        <button class="nav-btn" @click="$emit('openCalendar')">
+            📅 <span class="label">Дата</span>
+        </button>
             <button class="nav-arrow" @click="changeWeek(-7)">←</button>
-            <span class="week-label">{{ weekDateRange }}</span>
-            <button class="nav-arrow" @click="changeWeek(7)">→</button>
-        </div>
-
-        <div class="grid-header">
             <div v-for="day in weekDays" :key="day.date" class="header-cell" :class="{ 'is-today': day.isToday }">
                 <span class="weekday">{{ day.name }}</span>
                 <span class="date">{{ day.displayDate }}</span>
             </div>
+            <button class="nav-arrow" @click="changeWeek(7)">→</button>
+            <button class="nav-btn" @click="$emit('openSettings')">
+            ⚙️ <span class="label">Настройки</span>
+        </button>
         </div>
-
+    <div class="week-view-container">
         <div class="grid-body">
             <div v-for="day in weekDays" :key="day.date" class="day-column">
                 <div v-for="slot in 5" :key="slot" class="slot-cell">
@@ -255,7 +255,7 @@ lesson-content-wrapper {
     border: none;
     /* Добавляем линию-разделитель снизу */
     border-bottom: 1px solid var(--row-border);
-    height: 110px;
+    height: 130px;
     position: relative;
     padding: 0;
 }
@@ -268,7 +268,7 @@ lesson-content-wrapper {
 .slot-num {
     position: absolute;
     bottom: 6px;
-    left: 8px;
+    right: 8px;
     font-size: 14px;
     opacity: 0.2;
     font-weight: bold;
@@ -300,4 +300,21 @@ lesson-content-wrapper {
 .slot-cell:hover {
     background-color: rgba(255, 255, 255, 0.02);
 }
+.nav-btn {
+    background: var(--row-border);
+    border: 1px solid transparent;
+    color: var(--text-primary);
+    padding: 6px 16px;
+    border-radius: 8px;
+    font-size: 18px;
+    cursor: pointer;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+.nav-btn:hover {
+    opacity: 1;
+    transform: scale(0.95);
+}
+
 </style>

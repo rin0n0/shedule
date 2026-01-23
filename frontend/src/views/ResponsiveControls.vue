@@ -68,7 +68,6 @@ onMounted(() => {
 
 /* Desktop: Сверху */
 .controls-wrapper:not(.is-mobile) {
-    position: sticky;
     top: 20px;
     margin: 0 auto 20px;
     width: 90%;
