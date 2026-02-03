@@ -117,4 +117,10 @@ watch(() => route.params.date, (newDate) => {
 .fade-leave-to {
     opacity: 0;
 }
+
+@media (min-width:788px) {
+    .content-area {
+    overflow-y: auto;
+}
+}
 </style>

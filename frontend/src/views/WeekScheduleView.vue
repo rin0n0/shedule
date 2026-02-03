@@ -118,7 +118,6 @@ watch(() => props.centerDate, (newDate) => {
 
 <style scoped>
 .week-view-container {
-    height: 100%;
     overflow-y: auto;
     padding: 20px;
     display: flex;
@@ -225,24 +224,18 @@ lesson-content-wrapper {
     opacity: 0.6;
 }
 
-/* ... (верхняя часть без изменений) ... */
 
 .grid-body {
     display: grid;
     grid-template-columns: repeat(6, 1fr);
     gap: 8px;
-    /* Расстояние между колонками (днями) */
     flex: 1;
 }
 
 .day-column {
     display: flex;
     flex-direction: column;
-    /* Убираем gap между парами, чтобы они слипались в одну колонку, 
-       но разделялись линиями. Если хочешь раздельные блоки - ставь gap: 4px */
     gap: 0;
-
-    /* Общая обводка вокруг дня */
     border: 1px solid var(--card-border);
     border-radius: 12px;
     overflow: hidden;
@@ -267,6 +260,7 @@ lesson-content-wrapper {
 
 .slot-num {
     position: absolute;
+    user-select: none;
     bottom: 6px;
     right: 8px;
     font-size: 14px;

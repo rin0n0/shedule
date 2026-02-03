@@ -64,7 +64,7 @@ const handleClick = () => {
     /* Прижимает header и footer к краям */
     padding: 12px;
     width: 100%;
-    height: 100%;
+    /* height: 100%; */
     position: relative;
     cursor: pointer;
     transition: background 0.2s;
@@ -80,7 +80,6 @@ const handleClick = () => {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    /* Выравнивание по верху */
     gap: 8px;
 }
 
@@ -139,7 +138,6 @@ const handleClick = () => {
     align-items: flex-end;
     /* Выравнивание по низу */
     gap: 8px;
-    margin-top: 8px;
     /* Отступ от верхнего блока */
 }
 
